@@ -52,7 +52,13 @@ runs:
             echo "::group::Installing upterm & tmux"
             if [[ "$OSTYPE" == "linux-gnu"* ]]; then
                 # install upterm
-                curl -sL https://github.com/owenthereal/upterm/releases/download/v0.20.0/upterm_linux_amd64.tar.gz | tar zxvf - -C /tmp upterm && sudo install /tmp/upterm /usr/local/bin/ && rm -rf /tmp/upterm
+                upterm_archive=/tmp/upterm_linux_amd64.tar.gz
+                upterm_sha256=f525c5da1e3e8f5b705651d9baa0aa97914c834a7e9353623614982b1683bcce
+                curl -sL -o "${upterm_archive}" https://github.com/owenthereal/upterm/releases/download/v0.20.0/upterm_linux_amd64.tar.gz
+                echo "${upterm_sha256}  ${upterm_archive}" | shasum -a 256 -c -
+                tar zxvf "${upterm_archive}" -C /tmp upterm
+                sudo install /tmp/upterm /usr/local/bin/
+                rm -f "${upterm_archive}" /tmp/upterm
         
                 # install tmux if it's not present
                 if ! command -v tmux &>/dev/null; then
@@ -84,7 +90,8 @@ runs:
             authorizedKeysParameter=""
             authorizedKeysFile=${HOME}/.ssh/authorized_keys
             if [[ "${{ inputs.secure-access }}" != "false" ]]; then
-                ssh-keygen -q -t ed25519 -N "$(echo $RANDOM | md5sum | awk '{ print $1 }')" -C "Prevent public access" -f /tmp/dummykey$$
+                dummy_passphrase=$(openssl rand -hex 16)
+                ssh-keygen -q -t ed25519 -N "${dummy_passphrase}" -C "Prevent public access" -f /tmp/dummykey$$
                 cat /tmp/dummykey$$.pub >> $authorizedKeysFile
                 rm /tmp/dummykey$$ /tmp/dummykey$$.pub
             fi

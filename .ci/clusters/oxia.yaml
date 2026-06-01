@@ -29,7 +29,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: oxia
-          image: streamnative/oxia:main
+          image: streamnative/oxia:0.13
           command:
             - oxia
             - standalone

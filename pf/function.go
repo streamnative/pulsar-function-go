@@ -306,7 +306,7 @@ func readInputFrame(line []byte) (string, []byte, error) {
 
 	meta := strings.Split(string(line[metaStart:metaEnd]), "@")
 	if len(meta) != 2 {
-		return "", nil, fmt.Errorf("meta length is not 2")
+		return "", nil, fmt.Errorf("invalid metadata format: expected message id and topic separated by @")
 	}
 
 	// ignore the last `\n` byte

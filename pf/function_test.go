@@ -45,3 +45,15 @@ func TestReadInputFrameRejectsTruncatedExtendedMetadataLength(t *testing.T) {
 		t.Fatal("readInputFrame returned nil error, want truncated extended metadata error")
 	}
 }
+
+func TestReadInputFrameRejectsMalformedMetadata(t *testing.T) {
+	frame := append([]byte{byte(len("missing-topic"))}, []byte("missing-topicpayload\n")...)
+
+	_, _, err := readInputFrame(frame)
+	if err == nil {
+		t.Fatal("readInputFrame returned nil error, want malformed metadata error")
+	}
+	if err.Error() != "invalid metadata format: expected message id and topic separated by @" {
+		t.Fatalf("error = %q, want malformed metadata error", err.Error())
+	}
+}

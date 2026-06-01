@@ -50,7 +50,7 @@ function ci::verify_function_mesh() {
     while [[ ${num} -lt 1 ]]; do
         sleep 5
         kubectl get pods
-        num=$(kubectl get pods -l compute.functionmesh.io/name="${FUNCTION_NAME}" | wc -l)
+        num=$(kubectl get pods -l compute.functionmesh.io/name="${FUNCTION_NAME}" -o name | wc -l | tr -d ' ')
     done
 
     kubectl wait -l compute.functionmesh.io/name="${FUNCTION_NAME}" --for=condition=Ready pod --timeout=2m && true
