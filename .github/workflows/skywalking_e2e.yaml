@@ -1,0 +1,50 @@
+name: Precommit - Integration Tests
+on:
+  pull_request:
+    branches:
+      - '*'
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+permissions: read-all
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    continue-on-error: true
+    steps:
+      - name: clean disk
+        run: |
+          sudo swapoff -a
+          sudo rm -rf /swapfile /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt clean
+          docker rmi $(docker images -q) -f || true
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          repository: ${{github.event.pull_request.head.repo.full_name}}
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup ssh access to build runner VM
+        uses: ./.github/actions/ssh-access
+        with:
+          limit-access-to-actor: true
+
+      - uses: apache/skywalking-infra-e2e@v1.2.0
+        with:
+          e2e-file: .ci/tests/integration/e2e.yaml
+
+      - name: Wait for ssh connection when build fails
+        uses: ./.github/actions/ssh-access
+        if: failure()
+        continue-on-error: true
+        with:
+          action: wait
+
+      - name: Cleanup
+        if: ${{ failure() }}
+        run: e2e cleanup -c .ci/tests/integration/e2e.yaml
