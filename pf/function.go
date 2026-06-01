@@ -33,6 +33,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -48,8 +49,9 @@ import (
 )
 
 const (
-	ErrorMark = "XXX_PULSAR_ERROR_XXX:"
-	EmptyMark = "XXX_PULSAR_EMPTY_XXX"
+	ErrorMark                   = "XXX_PULSAR_ERROR_XXX:"
+	EmptyMark                   = "XXX_PULSAR_EMPTY_XXX"
+	extendedStdinMetadataMarker = 255
 )
 
 var (
@@ -257,24 +259,15 @@ func Start(funcName interface{}) {
 			}
 			break
 		}
-		metaLength := line[0]
-
-		if len(line) < int(metaLength+3) {
-			writeResult([]byte(ErrorMark + "meta length is too long"))
-			continue
-		}
-
-		meta := strings.Split(string(line[1:metaLength+1]), "@")
-		if len(meta) != 2 {
-			writeResult([]byte(ErrorMark + "meta length is not 2"))
+		msgID, msg, err := readInputFrame(line)
+		if err != nil {
+			writeResult([]byte(ErrorMark + err.Error()))
 			continue
 		}
 		functionContext.setMessageId(&MessageId{
-			Id: meta[0],
+			Id: msgID,
 		})
 
-		// ignore the last `\n` byte
-		msg := line[metaLength+1 : len(line)-1]
 		if len(msg) == 0 {
 			writeResult([]byte(ErrorMark + "msg length is 0"))
 			continue
@@ -289,6 +282,35 @@ func Start(funcName interface{}) {
 
 		writeResult(result)
 	}
+}
+
+func readInputFrame(line []byte) (string, []byte, error) {
+	if len(line) == 0 {
+		return "", nil, fmt.Errorf("input frame is empty")
+	}
+
+	metaLength := int(line[0])
+	metaStart := 1
+	if line[0] == extendedStdinMetadataMarker {
+		if len(line) < 5 {
+			return "", nil, fmt.Errorf("extended meta length is truncated")
+		}
+		metaLength = int(binary.BigEndian.Uint32(line[1:5]))
+		metaStart = 5
+	}
+	metaEnd := metaStart + metaLength
+
+	if len(line) < metaEnd+2 {
+		return "", nil, fmt.Errorf("meta length is too long")
+	}
+
+	meta := strings.Split(string(line[metaStart:metaEnd]), "@")
+	if len(meta) != 2 {
+		return "", nil, fmt.Errorf("invalid metadata format: expected message id and topic separated by @")
+	}
+
+	// ignore the last `\n` byte
+	return meta[0], line[metaEnd : len(line)-1], nil
 }
 
 func writeResult(result []byte) {

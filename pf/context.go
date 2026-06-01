@@ -75,6 +75,7 @@ func NewFunctionContext(ctx context.Context, tenant, namespace, name, functionId
 
 func (c *FunctionContext) setMessageId(messageId *MessageId) {
 	c.messageId = messageId
+	c.message = nil
 }
 
 // GetInstanceID returns the id of the instance that invokes the running pulsar
@@ -228,7 +229,7 @@ func (c *FunctionContext) GetMessageKey() (string, error) {
 }
 
 // GetMessageEventTime gets the current message's event time
-func (c *FunctionContext) GetMessageEventTime() (int32, error) {
+func (c *FunctionContext) GetMessageEventTime() (int64, error) {
 	if c.message == nil {
 		_, err := c.GetCurrentRecord()
 		if err != nil {

@@ -1,0 +1,55 @@
+apiVersion: compute.functionmesh.io/v1alpha1
+kind: Function
+metadata:
+  name: exec-function-excla-generic-sample
+  namespace: default
+spec:
+  image: streamnative/pulsar-functions-generic-base-runner:latest
+  className: excla
+  forwardSourceMessageProperty: true
+  maxPendingAsyncRequests: 1000
+  replicas: 1
+  logTopic: persistent://public/default/exec-generic-excla-logs
+  input:
+    topics:
+    - persistent://public/default/exec-generic-excla-input
+    typeClassName: string
+  output:
+    topic: persistent://public/default/exec-generic-excla-output
+    typeClassName: string
+  resources:
+    requests:
+      cpu: 500m
+      memory: 0.5G
+    limits:
+      cpu: 500m
+      memory: 0.5G
+  funcConfig:
+    configKey: cfg-value
+  secretsMap:
+    "secretKey":
+      path: "test-secret"
+      key: "key"
+  pulsar:
+    pulsarConfig: "test-exec-pulsar"
+    tlsConfig:
+      enabled: false
+      allowInsecure: true
+      hostnameVerification: true
+  genericRuntime:
+    functionFile: excla
+    functionFileLocation: function://public/default/exec-exclamation
+    language: executable
+  statefulConfig:
+    pulsar:
+      serviceUrl: oxia://oxia.default.svc.cluster.local:6648
+  clusterName: test
+  autoAck: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-exec-pulsar
+data:
+  webServiceURL: http://sn-platform-pulsar-broker.default.svc.cluster.local:8080
+  brokerServiceURL: pulsar://sn-platform-pulsar-broker.default.svc.cluster.local:6650

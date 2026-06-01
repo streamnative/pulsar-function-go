@@ -95,7 +95,7 @@ message Record {
   string key = 4;
   string partitionId = 5;
   string topicName = 6;
-  int32 eventTimestamp = 7;
+  int64 eventTimestamp = 7;
 }
 
 message MetricData {
