@@ -3,12 +3,6 @@ setup:
   file: ../kind.yaml
   init-system-environment: ../env
   steps:
-    - name: pull generic runtime image
-      command: |
-        image=streamnative/pulsar-functions-generic-base-runner@sha256:a341e4463eecb7f126d5320d8d66b4403d3a1a4ad5926585b6a8b08332c4c1ca
-        docker pull "${image}"
-        kind load docker-image "${image}"
-
     - name: install helm
       command: |
         curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
