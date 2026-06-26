@@ -52,9 +52,14 @@ const (
 	ErrorMark                   = "XXX_PULSAR_ERROR_XXX:"
 	EmptyMark                   = "XXX_PULSAR_EMPTY_XXX"
 	extendedStdinMetadataMarker = 255
+	binaryV2StatusOK            = 0
+	binaryV2StatusEmpty         = 1
+	binaryV2StatusError         = 2
 )
 
 var (
+	binaryV2InputMagic          = [4]byte{'P', 'F', 'I', '2'}
+	binaryV2OutputMagic         = [4]byte{'P', 'F', 'O', '2'}
 	stdout                      *os.File
 	tenant                      string
 	namespace                   string
@@ -71,6 +76,13 @@ var (
 	port                        int
 	metricsPort                 int
 	expectedHealthCheckInterval int
+)
+
+type childProtocol int
+
+const (
+	childProtocolLineV1 childProtocol = iota
+	childProtocolBinaryV2
 )
 
 type function interface {
@@ -252,16 +264,12 @@ func Start(funcName interface{}) {
 	defer cancel()
 
 	for {
-		line, err := reader.ReadBytes('\n')
+		protocol, msgID, msg, err := readInput(reader)
 		if err != nil {
-			if err != io.EOF {
-				logrus.Errorf("Error reading from stdout: %v", err)
+			if err == io.EOF {
+				break
 			}
-			break
-		}
-		msgID, msg, err := readInputFrame(line)
-		if err != nil {
-			writeResult([]byte(ErrorMark + err.Error()))
+			writeResult(stdout, protocol, nil, err)
 			continue
 		}
 		functionContext.setMessageId(&MessageId{
@@ -269,19 +277,45 @@ func Start(funcName interface{}) {
 		})
 
 		if len(msg) == 0 {
-			writeResult([]byte(ErrorMark + "msg length is 0"))
+			writeResult(stdout, protocol, nil, fmt.Errorf("msg length is 0"))
 			continue
 		}
 
 		valuedCtx := NewContext(ctxWithCancel, functionContext)
 		result, err := function.process(valuedCtx, msg)
 		if err != nil {
-			writeResult([]byte(ErrorMark + "handle message: " + err.Error()))
+			writeResult(stdout, protocol, nil, fmt.Errorf("handle message: %w", err))
 			continue
 		}
 
-		writeResult(result)
+		writeResult(stdout, protocol, result, nil)
 	}
+}
+
+func readInput(reader *bufio.Reader) (childProtocol, string, []byte, error) {
+	magic, err := reader.Peek(len(binaryV2InputMagic))
+	if err != nil && err != bufio.ErrBufferFull {
+		if err == io.EOF {
+			return childProtocolLineV1, "", nil, err
+		}
+		line, lineErr := reader.ReadBytes('\n')
+		if lineErr != nil {
+			return childProtocolLineV1, "", nil, lineErr
+		}
+		msgID, payload, frameErr := readInputFrame(line)
+		return childProtocolLineV1, msgID, payload, frameErr
+	}
+	if bytes.Equal(magic, binaryV2InputMagic[:]) {
+		msgID, payload, err := readBinaryV2InputFrame(reader)
+		return childProtocolBinaryV2, msgID, payload, err
+	}
+
+	line, err := reader.ReadBytes('\n')
+	if err != nil {
+		return childProtocolLineV1, "", nil, err
+	}
+	msgID, payload, err := readInputFrame(line)
+	return childProtocolLineV1, msgID, payload, err
 }
 
 func readInputFrame(line []byte) (string, []byte, error) {
@@ -313,14 +347,76 @@ func readInputFrame(line []byte) (string, []byte, error) {
 	return meta[0], line[metaEnd : len(line)-1], nil
 }
 
-func writeResult(result []byte) {
-	if len(result) > 0 {
-		result = bytes.ReplaceAll(result, []byte("\n"), []byte(""))
-		_, _ = stdout.Write(result)
-	} else {
-		_, _ = stdout.Write([]byte(EmptyMark))
+func readBinaryV2InputFrame(reader io.Reader) (string, []byte, error) {
+	var magic [4]byte
+	if _, err := io.ReadFull(reader, magic[:]); err != nil {
+		return "", nil, fmt.Errorf("could not read binary v2 input magic: %w", err)
 	}
-	_, _ = stdout.Write([]byte("\n"))
+	if magic != binaryV2InputMagic {
+		return "", nil, fmt.Errorf("invalid binary v2 input magic")
+	}
+
+	var metadataLenBytes [4]byte
+	if _, err := io.ReadFull(reader, metadataLenBytes[:]); err != nil {
+		return "", nil, fmt.Errorf("could not read binary v2 metadata length: %w", err)
+	}
+	metadataLen := binary.BigEndian.Uint32(metadataLenBytes[:])
+
+	var payloadLenBytes [8]byte
+	if _, err := io.ReadFull(reader, payloadLenBytes[:]); err != nil {
+		return "", nil, fmt.Errorf("could not read binary v2 payload length: %w", err)
+	}
+	payloadLen := binary.BigEndian.Uint64(payloadLenBytes[:])
+	if payloadLen > uint64(int(^uint(0)>>1)) {
+		return "", nil, fmt.Errorf("binary v2 payload length %d exceeds int max", payloadLen)
+	}
+
+	metadata := make([]byte, metadataLen)
+	if _, err := io.ReadFull(reader, metadata); err != nil {
+		return "", nil, fmt.Errorf("could not read binary v2 metadata: %w", err)
+	}
+	meta := strings.Split(string(metadata), "@")
+	if len(meta) != 2 {
+		return "", nil, fmt.Errorf("invalid metadata format: expected message id and topic separated by @")
+	}
+
+	payload := make([]byte, int(payloadLen))
+	if _, err := io.ReadFull(reader, payload); err != nil {
+		return "", nil, fmt.Errorf("could not read binary v2 payload: %w", err)
+	}
+	return meta[0], payload, nil
+}
+
+func writeResult(writer io.Writer, protocol childProtocol, result []byte, resultErr error) {
+	if protocol == childProtocolBinaryV2 {
+		if resultErr != nil {
+			writeBinaryV2OutputFrame(writer, binaryV2StatusError, []byte(resultErr.Error()))
+		} else if len(result) > 0 {
+			writeBinaryV2OutputFrame(writer, binaryV2StatusOK, result)
+		} else {
+			writeBinaryV2OutputFrame(writer, binaryV2StatusEmpty, nil)
+		}
+		return
+	}
+
+	if resultErr != nil {
+		_, _ = writer.Write([]byte(ErrorMark + resultErr.Error()))
+	} else if len(result) > 0 {
+		result = bytes.ReplaceAll(result, []byte("\n"), []byte(""))
+		_, _ = writer.Write(result)
+	} else {
+		_, _ = writer.Write([]byte(EmptyMark))
+	}
+	_, _ = writer.Write([]byte("\n"))
+}
+
+func writeBinaryV2OutputFrame(writer io.Writer, status byte, body []byte) {
+	_, _ = writer.Write(binaryV2OutputMagic[:])
+	_, _ = writer.Write([]byte{status})
+	var bodyLen [8]byte
+	binary.BigEndian.PutUint64(bodyLen[:], uint64(len(body)))
+	_, _ = writer.Write(bodyLen[:])
+	_, _ = writer.Write(body)
 }
 
 func init() {
