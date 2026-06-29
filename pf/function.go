@@ -55,6 +55,10 @@ const (
 	binaryV2StatusOK            = 0
 	binaryV2StatusEmpty         = 1
 	binaryV2StatusError         = 2
+	binaryV2FrameHeaderBytes    = 16
+	binaryV2MaxMetadataBytes    = 64 * 1024
+	binaryV2MaxPayloadBytes     = 128 * 1024 * 1024
+	binaryV2MaxFrameBytes       = binaryV2FrameHeaderBytes + binaryV2MaxMetadataBytes + binaryV2MaxPayloadBytes
 )
 
 var (
@@ -361,14 +365,21 @@ func readBinaryV2InputFrame(reader io.Reader) (string, []byte, error) {
 		return "", nil, fmt.Errorf("could not read binary v2 metadata length: %w", err)
 	}
 	metadataLen := binary.BigEndian.Uint32(metadataLenBytes[:])
+	if metadataLen > binaryV2MaxMetadataBytes {
+		return "", nil, fmt.Errorf("binary v2 metadata length %d exceeds max %d", metadataLen, binaryV2MaxMetadataBytes)
+	}
 
 	var payloadLenBytes [8]byte
 	if _, err := io.ReadFull(reader, payloadLenBytes[:]); err != nil {
 		return "", nil, fmt.Errorf("could not read binary v2 payload length: %w", err)
 	}
 	payloadLen := binary.BigEndian.Uint64(payloadLenBytes[:])
-	if payloadLen > uint64(int(^uint(0)>>1)) {
-		return "", nil, fmt.Errorf("binary v2 payload length %d exceeds int max", payloadLen)
+	if payloadLen > binaryV2MaxPayloadBytes {
+		return "", nil, fmt.Errorf("binary v2 payload length %d exceeds max %d", payloadLen, binaryV2MaxPayloadBytes)
+	}
+	frameLen := uint64(binaryV2FrameHeaderBytes) + uint64(metadataLen) + payloadLen
+	if frameLen > binaryV2MaxFrameBytes {
+		return "", nil, fmt.Errorf("binary v2 frame length %d exceeds max %d", frameLen, binaryV2MaxFrameBytes)
 	}
 
 	metadata := make([]byte, metadataLen)

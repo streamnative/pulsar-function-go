@@ -80,6 +80,32 @@ func TestReadInputPreservesBinaryV2Payload(t *testing.T) {
 	}
 }
 
+func TestReadBinaryV2InputFrameRejectsOversizedMetadataBeforeAllocating(t *testing.T) {
+	input := binaryV2InputFrameWithLengths(binaryV2MaxMetadataBytes+1, 0)
+
+	_, _, err := readBinaryV2InputFrame(bytes.NewReader(input))
+	if err == nil {
+		t.Fatal("readBinaryV2InputFrame returned nil error, want oversized metadata error")
+	}
+	if !strings.Contains(err.Error(), "metadata length") {
+		t.Fatalf("error = %q, want metadata length error", err.Error())
+	}
+}
+
+func TestReadBinaryV2InputFrameRejectsOversizedPayloadBeforeAllocating(t *testing.T) {
+	metadata := "1:2:3@topic"
+	input := binaryV2InputFrameWithLengths(uint32(len(metadata)), binaryV2MaxPayloadBytes+1)
+	input = append(input, []byte(metadata)...)
+
+	_, _, err := readBinaryV2InputFrame(bytes.NewReader(input))
+	if err == nil {
+		t.Fatal("readBinaryV2InputFrame returned nil error, want oversized payload error")
+	}
+	if !strings.Contains(err.Error(), "payload length") {
+		t.Fatalf("error = %q, want payload length error", err.Error())
+	}
+}
+
 func TestWriteResultPreservesBinaryV2Payload(t *testing.T) {
 	payload := []byte{0, 'a', '\n', '\r', 255}
 	var out bytes.Buffer
@@ -132,6 +158,13 @@ func binaryV2InputFrame(metadata string, payload []byte) []byte {
 	frame = binary.BigEndian.AppendUint64(frame, uint64(len(payload)))
 	frame = append(frame, []byte(metadata)...)
 	frame = append(frame, payload...)
+	return frame
+}
+
+func binaryV2InputFrameWithLengths(metadataLen uint32, payloadLen uint64) []byte {
+	frame := append([]byte{}, binaryV2InputMagic[:]...)
+	frame = binary.BigEndian.AppendUint32(frame, metadataLen)
+	frame = binary.BigEndian.AppendUint64(frame, payloadLen)
 	return frame
 }
 
