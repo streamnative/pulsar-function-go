@@ -1,3 +1,22 @@
+//
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+//
+
 package pf
 
 import (
@@ -7,10 +26,32 @@ import (
 	"strings"
 )
 
-// SinkSchemaSidecarFileName is the schema sidecar file consumed by the generic runtime.
-const SinkSchemaSidecarFileName = "sink.schema.json"
+const (
+	// SinkSchemaSidecarFileName is the schema sidecar file consumed by the generic runtime.
+	SinkSchemaSidecarFileName = "sink.schema.json"
+
+	// SchemaTypeNone disables the sink schema sidecar.
+	SchemaTypeNone = "none"
+	// SchemaTypeBytes disables the sink schema sidecar.
+	SchemaTypeBytes     = "bytes"
+	SchemaTypeJSON      = "json"
+	SchemaTypeAvro      = "avro"
+	SchemaTypeString    = "string"
+	SchemaTypeBool      = "bool"
+	SchemaTypeInt8      = "int8"
+	SchemaTypeInt16     = "int16"
+	SchemaTypeInt32     = "int32"
+	SchemaTypeInt64     = "int64"
+	SchemaTypeFloat     = "float"
+	SchemaTypeDouble    = "double"
+	SchemaTypeDate      = "date"
+	SchemaTypeTime      = "time"
+	SchemaTypeTimestamp = "timestamp"
+)
 
 // SinkSchema describes the sink schema definition written to the runtime sidecar file.
+// SchemaType should use one of the SchemaType* constants for JSON, Avro, or
+// primitive schemas. Empty, none, and bytes schema types do not need sidecars.
 type SinkSchema struct {
 	SchemaType string
 	Name       string
@@ -43,8 +84,12 @@ func WriteSinkSchemaSidecar(schema SinkSchema) (string, error) {
 }
 
 func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, error) {
-	schemaType := strings.TrimSpace(schema.SchemaType)
-	if schemaType == "" || strings.EqualFold(schemaType, "bytes") {
+	schemaType := normalizeSinkSchemaType(schema.SchemaType)
+	sidecarPath := filepath.Join(workDir, SinkSchemaSidecarFileName)
+	if isNoSchemaType(schemaType) {
+		if err := os.Remove(sidecarPath); err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
 		return "", nil
 	}
 
@@ -63,9 +108,16 @@ func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, err
 		return "", err
 	}
 
-	sidecarPath := filepath.Join(workDir, SinkSchemaSidecarFileName)
 	if err := os.WriteFile(sidecarPath, content, 0644); err != nil {
 		return "", err
 	}
 	return sidecarPath, nil
+}
+
+func normalizeSinkSchemaType(schemaType string) string {
+	return strings.ToLower(strings.TrimSpace(schemaType))
+}
+
+func isNoSchemaType(schemaType string) bool {
+	return schemaType == "" || schemaType == SchemaTypeBytes || schemaType == SchemaTypeNone
 }

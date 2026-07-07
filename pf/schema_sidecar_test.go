@@ -1,3 +1,22 @@
+//
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+//
+
 package pf
 
 import (
@@ -10,7 +29,7 @@ import (
 func TestWriteSinkSchemaSidecarToDirWritesCommonSidecar(t *testing.T) {
 	workDir := t.TempDir()
 	schema := SinkSchema{
-		SchemaType: "json",
+		SchemaType: SchemaTypeJSON,
 		Name:       "example.Student",
 		SchemaData: `{"type":"record","name":"Student","fields":[]}`,
 		Properties: map[string]string{
@@ -54,18 +73,63 @@ func TestWriteSinkSchemaSidecarToDirWritesCommonSidecar(t *testing.T) {
 	}
 }
 
-func TestWriteSinkSchemaSidecarToDirSkipsBytesSchema(t *testing.T) {
+func TestWriteSinkSchemaSidecarToDirSkipsNoSchemaTypesAndRemovesStaleSidecar(t *testing.T) {
+	tests := []struct {
+		name       string
+		schemaType string
+	}{
+		{name: "empty", schemaType: ""},
+		{name: "bytes", schemaType: SchemaTypeBytes},
+		{name: "uppercase bytes", schemaType: "BYTES"},
+		{name: "none", schemaType: SchemaTypeNone},
+		{name: "uppercase none", schemaType: "NONE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workDir := t.TempDir()
+			sidecarFile := filepath.Join(workDir, SinkSchemaSidecarFileName)
+			if err := os.WriteFile(sidecarFile, []byte("stale"), 0644); err != nil {
+				t.Fatalf("write stale sidecar: %v", err)
+			}
+
+			sidecarPath, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{SchemaType: tt.schemaType})
+			if err != nil {
+				t.Fatalf("writeSinkSchemaSidecarToDir returned error: %v", err)
+			}
+			if sidecarPath != "" {
+				t.Fatalf("sidecarPath = %q, want empty", sidecarPath)
+			}
+			if _, err := os.Stat(sidecarFile); !os.IsNotExist(err) {
+				t.Fatalf("sidecar stat error = %v, want not exist", err)
+			}
+		})
+	}
+}
+
+func TestWriteSinkSchemaSidecarToDirNormalizesSchemaType(t *testing.T) {
 	workDir := t.TempDir()
 
-	sidecarPath, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{SchemaType: "bytes"})
+	sidecarPath, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{
+		SchemaType: "JSON",
+		SchemaData: `{"type":"record","name":"Student","fields":[]}`,
+	})
 	if err != nil {
 		t.Fatalf("writeSinkSchemaSidecarToDir returned error: %v", err)
 	}
-	if sidecarPath != "" {
-		t.Fatalf("sidecarPath = %q, want empty", sidecarPath)
+
+	content, err := os.ReadFile(sidecarPath)
+	if err != nil {
+		t.Fatalf("read sidecar: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(workDir, SinkSchemaSidecarFileName)); !os.IsNotExist(err) {
-		t.Fatalf("sidecar stat error = %v, want not exist", err)
+	var payload struct {
+		SchemaType string `json:"schemaType"`
+	}
+	if err := json.Unmarshal(content, &payload); err != nil {
+		t.Fatalf("unmarshal sidecar: %v", err)
+	}
+	if payload.SchemaType != SchemaTypeJSON {
+		t.Fatalf("schemaType = %q, want %q", payload.SchemaType, SchemaTypeJSON)
 	}
 }
 
@@ -73,7 +137,7 @@ func TestWriteSinkSchemaSidecarToDirWritesEmptyPropertiesObject(t *testing.T) {
 	workDir := t.TempDir()
 
 	sidecarPath, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{
-		SchemaType: "string",
+		SchemaType: SchemaTypeString,
 		SchemaData: "",
 	})
 	if err != nil {
