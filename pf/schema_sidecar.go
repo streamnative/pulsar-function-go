@@ -108,10 +108,36 @@ func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, err
 		return "", err
 	}
 
-	if err := os.WriteFile(sidecarPath, content, 0644); err != nil {
+	if err := writeFileAtomic(sidecarPath, content, 0644); err != nil {
 		return "", err
 	}
 	return sidecarPath, nil
+}
+
+func writeFileAtomic(path string, content []byte, perm os.FileMode) error {
+	tmpFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	_, writeErr := tmpFile.Write(content)
+	chmodErr := tmpFile.Chmod(perm)
+	closeErr := tmpFile.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	if chmodErr != nil {
+		return chmodErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	return os.Rename(tmpPath, path)
 }
 
 func isNoSchemaType(schemaType string) bool {

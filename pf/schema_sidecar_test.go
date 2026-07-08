@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -130,6 +131,49 @@ func TestWriteSinkSchemaSidecarToDirTrimsSchemaTypeAndPreservesCasing(t *testing
 	}
 	if payload.SchemaType != "JSON" {
 		t.Fatalf("schemaType = %q, want JSON", payload.SchemaType)
+	}
+}
+
+func TestWriteSinkSchemaSidecarToDirAtomicallyReplacesExistingSidecar(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink permissions differ on Windows")
+	}
+	workDir := t.TempDir()
+	sidecarFile := filepath.Join(workDir, SinkSchemaSidecarFileName)
+	readOnlyTarget := filepath.Join(workDir, "read-only-target")
+	if err := os.WriteFile(readOnlyTarget, []byte("target"), 0400); err != nil {
+		t.Fatalf("write read-only target: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(readOnlyTarget, 0600)
+	}()
+	if err := os.Symlink(readOnlyTarget, sidecarFile); err != nil {
+		t.Fatalf("create sidecar symlink: %v", err)
+	}
+
+	sidecarPath, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{
+		SchemaType: SchemaTypeJSON,
+		SchemaData: `{"type":"record","name":"Student","fields":[]}`,
+	})
+	if err != nil {
+		t.Fatalf("writeSinkSchemaSidecarToDir returned error: %v", err)
+	}
+	if sidecarPath != sidecarFile {
+		t.Fatalf("sidecarPath = %q, want %q", sidecarPath, sidecarFile)
+	}
+	info, err := os.Lstat(sidecarFile)
+	if err != nil {
+		t.Fatalf("lstat sidecar: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("sidecar is still a symlink, want atomically replaced regular file")
+	}
+	targetContent, err := os.ReadFile(readOnlyTarget)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(targetContent) != "target" {
+		t.Fatalf("target content = %q, want unchanged", targetContent)
 	}
 }
 
