@@ -37,7 +37,7 @@ const (
 	SchemaTypeJSON      = "json"
 	SchemaTypeAvro      = "avro"
 	SchemaTypeString    = "string"
-	SchemaTypeBool      = "bool"
+	SchemaTypeBool      = "boolean"
 	SchemaTypeInt8      = "int8"
 	SchemaTypeInt16     = "int16"
 	SchemaTypeInt32     = "int32"
@@ -84,7 +84,7 @@ func WriteSinkSchemaSidecar(schema SinkSchema) (string, error) {
 }
 
 func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, error) {
-	schemaType := normalizeSinkSchemaType(schema.SchemaType)
+	schemaType := strings.TrimSpace(schema.SchemaType)
 	sidecarPath := filepath.Join(workDir, SinkSchemaSidecarFileName)
 	if isNoSchemaType(schemaType) {
 		if err := os.Remove(sidecarPath); err != nil && !os.IsNotExist(err) {
@@ -114,10 +114,11 @@ func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, err
 	return sidecarPath, nil
 }
 
-func normalizeSinkSchemaType(schemaType string) string {
-	return strings.ToLower(strings.TrimSpace(schemaType))
-}
-
 func isNoSchemaType(schemaType string) bool {
-	return schemaType == "" || schemaType == SchemaTypeBytes || schemaType == SchemaTypeNone
+	switch strings.ToLower(strings.TrimSpace(schemaType)) {
+	case "", SchemaTypeBytes, SchemaTypeNone:
+		return true
+	default:
+		return false
+	}
 }

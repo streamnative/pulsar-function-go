@@ -107,11 +107,11 @@ func TestWriteSinkSchemaSidecarToDirSkipsNoSchemaTypesAndRemovesStaleSidecar(t *
 	}
 }
 
-func TestWriteSinkSchemaSidecarToDirNormalizesSchemaType(t *testing.T) {
+func TestWriteSinkSchemaSidecarToDirTrimsSchemaTypeAndPreservesCasing(t *testing.T) {
 	workDir := t.TempDir()
 
 	sidecarPath, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{
-		SchemaType: "JSON",
+		SchemaType: " JSON ",
 		SchemaData: `{"type":"record","name":"Student","fields":[]}`,
 	})
 	if err != nil {
@@ -128,8 +128,14 @@ func TestWriteSinkSchemaSidecarToDirNormalizesSchemaType(t *testing.T) {
 	if err := json.Unmarshal(content, &payload); err != nil {
 		t.Fatalf("unmarshal sidecar: %v", err)
 	}
-	if payload.SchemaType != SchemaTypeJSON {
-		t.Fatalf("schemaType = %q, want %q", payload.SchemaType, SchemaTypeJSON)
+	if payload.SchemaType != "JSON" {
+		t.Fatalf("schemaType = %q, want JSON", payload.SchemaType)
+	}
+}
+
+func TestSchemaTypeBoolUsesPulsarBooleanName(t *testing.T) {
+	if SchemaTypeBool != "boolean" {
+		t.Fatalf("SchemaTypeBool = %q, want boolean", SchemaTypeBool)
 	}
 }
 
