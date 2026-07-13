@@ -116,9 +116,11 @@ func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, err
 
 func writeFileAtomic(path string, content []byte, perm os.FileMode) error {
 	var existingPerm os.FileMode
+	var hasExistingPerm bool
 	if info, err := os.Lstat(path); err == nil {
 		if info.Mode().IsRegular() {
 			existingPerm = info.Mode().Perm()
+			hasExistingPerm = true
 		}
 	} else if !os.IsNotExist(err) {
 		return err
@@ -142,7 +144,7 @@ func writeFileAtomic(path string, content []byte, perm os.FileMode) error {
 		_ = tmpFile.Close()
 		return err
 	}
-	if existingPerm != 0 {
+	if hasExistingPerm {
 		if err := tmpFile.Chmod(existingPerm); err != nil {
 			_ = tmpFile.Close()
 			return err
