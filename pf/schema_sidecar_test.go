@@ -177,6 +177,29 @@ func TestWriteSinkSchemaSidecarToDirAtomicallyReplacesExistingSidecar(t *testing
 	}
 }
 
+func TestWriteSinkSchemaSidecarToDirPreservesExistingSidecarPermissions(t *testing.T) {
+	workDir := t.TempDir()
+	sidecarFile := filepath.Join(workDir, SinkSchemaSidecarFileName)
+	if err := os.WriteFile(sidecarFile, []byte("old"), 0600); err != nil {
+		t.Fatalf("write existing sidecar: %v", err)
+	}
+	if err := os.Chmod(sidecarFile, 0600); err != nil {
+		t.Fatalf("chmod existing sidecar: %v", err)
+	}
+
+	if _, err := writeSinkSchemaSidecarToDir(workDir, SinkSchema{SchemaType: SchemaTypeJSON}); err != nil {
+		t.Fatalf("writeSinkSchemaSidecarToDir returned error: %v", err)
+	}
+
+	info, err := os.Stat(sidecarFile)
+	if err != nil {
+		t.Fatalf("stat sidecar: %v", err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0600); got != want {
+		t.Fatalf("sidecar permissions = %04o, want %04o", got, want)
+	}
+}
+
 func TestSchemaTypeBoolUsesPulsarBooleanName(t *testing.T) {
 	if SchemaTypeBool != "boolean" {
 		t.Fatalf("SchemaTypeBool = %q, want boolean", SchemaTypeBool)
