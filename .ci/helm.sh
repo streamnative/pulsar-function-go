@@ -108,7 +108,7 @@ function ci::kafka_reset_topics() {
     local kafka_admin_pod=${KAFKA_ADMIN_POD:-"my-kafka-controller-0"}
     local kafka_topics_bin=${KAFKA_TOPICS_BIN:-"/opt/bitnami/kafka/bin/kafka-topics.sh"}
     local partitions=${KAFKA_TOPIC_PARTITIONS:-"3"}
-    local replication_factor=${KAFKA_TOPIC_REPLICATION_FACTOR:-"3"}
+    local replication_factor=${KAFKA_TOPIC_REPLICATION_FACTOR:-"1"}
 
     for topic in "$@"; do
         kubectl exec -n ${NAMESPACE} "${kafka_admin_pod}" -- "${kafka_topics_bin}" \
