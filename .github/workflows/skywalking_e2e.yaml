@@ -33,14 +33,6 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Checkout generic runtime
-        uses: actions/checkout@v3
-        with:
-          repository: streamnative/pulsar-functions-generic-runtime
-          ref: main
-          path: generic-runtime
-          fetch-depth: 1
-
       - uses: apache/skywalking-infra-e2e@v1.2.0
         with:
           e2e-file: .ci/tests/integration/e2e.yaml
