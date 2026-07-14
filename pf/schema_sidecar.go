@@ -108,10 +108,53 @@ func writeSinkSchemaSidecarToDir(workDir string, schema SinkSchema) (string, err
 		return "", err
 	}
 
-	if err := os.WriteFile(sidecarPath, content, 0644); err != nil {
+	if err := writeFileAtomic(sidecarPath, content, 0644); err != nil {
 		return "", err
 	}
 	return sidecarPath, nil
+}
+
+func writeFileAtomic(path string, content []byte, perm os.FileMode) error {
+	var existingPerm os.FileMode
+	var hasExistingPerm bool
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode().IsRegular() {
+			existingPerm = info.Mode().Perm()
+			hasExistingPerm = true
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	tmpDir, err := os.MkdirTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	tmpPath := filepath.Join(tmpDir, filepath.Base(path))
+	tmpFile, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tmpFile.Write(content); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if hasExistingPerm {
+		if err := tmpFile.Chmod(existingPerm); err != nil {
+			_ = tmpFile.Close()
+			return err
+		}
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpPath, path)
 }
 
 func isNoSchemaType(schemaType string) bool {
