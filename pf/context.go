@@ -192,9 +192,22 @@ func (c *FunctionContext) GetSecret(secretName string) (*string, error) {
 
 // Publish publishes payload to the given topic
 func (c *FunctionContext) Publish(topic string, payload []byte) (*SendMessageId, error) {
+	return c.publish(topic, payload, nil)
+}
+
+// PublishWithSchema publishes an already-encoded payload with schema metadata.
+//
+// The Go SDK does not encode the payload. The caller must marshal the message
+// according to schema before calling this method.
+func (c *FunctionContext) PublishWithSchema(topic string, payload []byte, schema *PublishSchema) (*SendMessageId, error) {
+	return c.publish(topic, payload, schema)
+}
+
+func (c *FunctionContext) publish(topic string, payload []byte, schema *PublishSchema) (*SendMessageId, error) {
 	messageId, err := c.stub.Publish(c.ctx, &PulsarMessage{
 		Topic:   topic,
 		Payload: payload,
+		Schema:  schema,
 	})
 	return messageId, err
 }
