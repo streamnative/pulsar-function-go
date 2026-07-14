@@ -9,9 +9,7 @@ setup:
 
     - name: build generic runtime base image
       command: |
-        git clone --depth 1 https://github.com/streamnative/pulsar-functions-generic-runtime.git generic-runtime
-        cd generic-runtime
-        docker build --platform linux/amd64 -t pulsar-functions-generic-base-runner:ci -f images/Dockerfile --progress=plain .
+        docker build --platform linux/amd64 -t pulsar-functions-generic-base-runner:ci -f generic-runtime/images/Dockerfile --progress=plain generic-runtime
         kind load docker-image pulsar-functions-generic-base-runner:ci
 
     - name: setup cert-manager
