@@ -10,8 +10,7 @@ on:
 permissions: read-all
 jobs:
   integration:
-    runs-on:
-      labels: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: clean disk
