@@ -28,3 +28,4 @@ CLUSTER=sn-platform
 kubectl cp "${PULSAR_HOME}/.ci/examples" "${NAMESPACE}/${CLUSTER}-pulsar-broker-0:/pulsar/"
 
 kubectl exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin packages upload function://public/default/exec-exclamation --path /pulsar/examples/exclamationGo/excla --description "test executable function"
+kubectl exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin packages upload function://public/default/exec-context-publish-avro --path /pulsar/examples/contextPublishAvroGo/contextpublishavro --description "test executable context publish with avro schema"

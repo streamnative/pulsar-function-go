@@ -57,6 +57,13 @@ setup:
         kubectl exec -n ${PULSAR_NAMESPACE} ${PULSAR_RELEASE_NAME}-pulsar-bookie-0 -- cat conf/bookkeeper.conf
         kubectl exec -n ${PULSAR_NAMESPACE} ${PULSAR_RELEASE_NAME}-pulsar-bookie-0 -- nc -zv 127.0.0.1 4181
 
+    - name: install kafka cluster
+      command: |
+        helm install my-kafka oci://registry-1.docker.io/bitnamicharts/kafka -f .ci/clusters/kafka-values.yaml
+        kubectl wait -l app.kubernetes.io/instance=my-kafka --for=condition=Ready pod --timeout=5m
+        kubectl apply -f .ci/clusters/kafka-schema-registry.yaml
+        kubectl wait -l app=my-schema-registry --for=condition=Ready pod --timeout=5m
+
     - name: build golang exclamation example
       command: |
         cd .ci/examples/exclamationGo
@@ -64,6 +71,15 @@ setup:
         go mod edit -replace github.com/streamnative/pulsar-function-go=../../..
         go mod tidy
         CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o excla exclamation.go
+
+    - name: build golang context publish avro example
+      command: |
+        cd .ci/examples/contextPublishAvroGo
+        go mod init contextpublishavro
+        go mod edit -replace github.com/streamnative/pulsar-function-go=../../..
+        go get github.com/linkedin/goavro/v2@v2.15.0
+        go mod tidy
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o contextpublishavro context_publish_avro.go
 
     # upload packages here to avoid retry error
     - name: upload packages
@@ -109,4 +125,8 @@ verify:
     interval: 10s
   cases:
     - query: timeout 5m bash .ci/tests/integration/cases/executable-function/verify.sh
+      expected: expected.data.yaml
+    - query: timeout 5m bash .ci/tests/integration/cases/pulsar-context-publish-avro/verify.sh
+      expected: expected.data.yaml
+    - query: timeout 5m bash .ci/tests/integration/cases/kafka-context-publish-avro/verify.sh
       expected: expected.data.yaml

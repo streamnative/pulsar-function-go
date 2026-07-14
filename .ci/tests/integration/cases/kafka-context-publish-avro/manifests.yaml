@@ -1,0 +1,53 @@
+apiVersion: compute.functionmesh.io/v1alpha1
+kind: Function
+metadata:
+  name: kafka-context-publish-avro-generic-sample
+  namespace: default
+spec:
+  image: streamnative/pulsar-functions-generic-base-runner:latest
+  className: contextpublishavro
+  forwardSourceMessageProperty: true
+  maxPendingAsyncRequests: 1000
+  replicas: 1
+  input:
+    sourceSpecs:
+      "kafka-context-publish-avro-input":
+        schemaType: avro
+    typeClassName: Student
+  output:
+    topic: kafka-context-publish-avro-unused-output
+    typeClassName: string
+  funcConfig:
+    publishTopic: kafka-context-publish-avro-output
+    _child_protocol: binary_v2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 0.5G
+    limits:
+      cpu: 500m
+      memory: 0.5G
+  pulsarPackageService:
+    pulsarConfig: "test-kafka-context-publish-avro-pulsar"
+    tlsConfig:
+      enabled: false
+      allowInsecure: true
+      hostnameVerification: true
+  kafka:
+    bootstrapServers: my-kafka.default.svc.cluster.local:9092
+    producerConfig:
+      schema.registry.url: http://my-schema-registry.default.svc.cluster.local:8081
+  genericRuntime:
+    functionFile: contextpublishavro
+    functionFileLocation: function://public/default/exec-context-publish-avro
+    language: executable
+  clusterName: test
+  autoAck: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-kafka-context-publish-avro-pulsar
+data:
+  webServiceURL: http://sn-platform-pulsar-broker.default.svc.cluster.local:8080
+  brokerServiceURL: pulsar://sn-platform-pulsar-broker.default.svc.cluster.local:6650
