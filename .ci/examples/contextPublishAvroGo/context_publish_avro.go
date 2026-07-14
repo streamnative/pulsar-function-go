@@ -28,8 +28,10 @@ import (
 )
 
 const studentAvroSchema = `{"type":"record","name":"Student","fields":[{"name":"name","type":["null","string"]},{"name":"age","type":["null","int"]},{"name":"grade","type":["null","int"]}]}`
+const studentAvroInputFallbackSchema = `{"type":"record","name":"Student","fields":[{"name":"name","type":["null","string"]},{"name":"age","type":"int"},{"name":"grade","type":"int"}]}`
 
 var studentCodec = mustAvroCodec(studentAvroSchema)
+var studentInputFallbackCodec = mustAvroCodec(studentAvroInputFallbackSchema)
 
 func mustAvroCodec(schema string) *goavro.Codec {
 	codec, err := goavro.NewCodec(schema)
@@ -40,23 +42,30 @@ func mustAvroCodec(schema string) *goavro.Codec {
 }
 
 func HandleContextPublishAvro(ctx context.Context, in []byte) error {
-	native, _, err := studentCodec.NativeFromBinary(in)
+	record, err := decodeStudent(in)
 	if err != nil {
 		return err
 	}
 
-	record, ok := native.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected Avro record, got %T", native)
+	name, err := avroUnionString(record["name"])
+	if err != nil {
+		return err
 	}
-
+	age, err := avroUnionInt(record["age"])
+	if err != nil {
+		return err
+	}
 	grade, err := avroUnionInt(record["grade"])
 	if err != nil {
 		return err
 	}
-	record["grade"] = map[string]interface{}{"int": grade + 1}
 
-	output, err := studentCodec.BinaryFromNative(nil, record)
+	outputRecord := map[string]interface{}{
+		"name":  map[string]interface{}{"string": name},
+		"age":   map[string]interface{}{"int": age},
+		"grade": map[string]interface{}{"int": grade + 1},
+	}
+	output, err := studentCodec.BinaryFromNative(nil, outputRecord)
 	if err != nil {
 		return err
 	}
@@ -77,6 +86,37 @@ func HandleContextPublishAvro(ctx context.Context, in []byte) error {
 		SchemaData: []byte(studentAvroSchema),
 	})
 	return err
+}
+
+func decodeStudent(data []byte) (map[string]interface{}, error) {
+	for _, codec := range []*goavro.Codec{studentCodec, studentInputFallbackCodec} {
+		native, _, err := codec.NativeFromBinary(data)
+		if err != nil {
+			continue
+		}
+		record, ok := native.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expected Avro record, got %T", native)
+		}
+		return record, nil
+	}
+	_, _, err := studentCodec.NativeFromBinary(data)
+	return nil, err
+}
+
+func avroUnionString(value interface{}) (string, error) {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		raw, ok := typed["string"]
+		if !ok {
+			return "", fmt.Errorf("expected string union branch, got %v", typed)
+		}
+		return avroUnionString(raw)
+	case string:
+		return typed, nil
+	default:
+		return "", fmt.Errorf("expected Avro string, got %T", value)
+	}
 }
 
 func avroUnionInt(value interface{}) (int32, error) {

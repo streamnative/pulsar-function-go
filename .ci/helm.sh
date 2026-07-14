@@ -290,3 +290,11 @@ function ci::create_topic() {
   partition=${2:-"1"}
   kubectl exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin topics create-partitioned-topic ${topic} -p ${partition} || true
 }
+
+function ci::pulsar_reset_topics() {
+  local topic
+  for topic in "$@"; do
+    kubectl exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin topics delete --force "${topic}" >/dev/null 2>&1 || true
+    kubectl exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin schemas delete "${topic}" >/dev/null 2>&1 || true
+  done
+}

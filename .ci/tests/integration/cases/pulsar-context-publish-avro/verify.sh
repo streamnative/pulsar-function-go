@@ -34,6 +34,12 @@ fi
 
 manifests_file="${BASE_DIR}"/.ci/tests/integration/cases/pulsar-context-publish-avro/manifests.yaml
 
+kubectl delete -f "${manifests_file}" > /dev/null 2>&1 || true
+ci::pulsar_reset_topics \
+  "persistent://public/default/pulsar-context-publish-avro-input" \
+  "persistent://public/default/pulsar-context-publish-avro-output" \
+  "persistent://public/default/pulsar-context-publish-avro-unused-output"
+
 kubectl apply -f "${manifests_file}" > /dev/null 2>&1
 
 if ! verify_fm_result=$(ci::verify_function_mesh pulsar-context-publish-avro-generic-sample 2>&1); then
