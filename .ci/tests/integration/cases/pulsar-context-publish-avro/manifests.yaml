@@ -4,7 +4,7 @@ metadata:
   name: pulsar-context-publish-avro-generic-sample
   namespace: default
 spec:
-  image: streamnative/pulsar-functions-generic-base-runner:latest
+  image: pulsar-functions-generic-base-runner:ci
   className: contextpublishavro
   forwardSourceMessageProperty: true
   maxPendingAsyncRequests: 1000

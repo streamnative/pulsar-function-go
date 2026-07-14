@@ -7,6 +7,13 @@ setup:
       command: |
         curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+    - name: build generic runtime base image
+      command: |
+        git clone --depth 1 https://github.com/streamnative/pulsar-functions-generic-runtime.git generic-runtime
+        cd generic-runtime
+        docker build --platform linux/amd64 -t pulsar-functions-generic-base-runner:ci -f images/Dockerfile --progress=plain .
+        kind load docker-image pulsar-functions-generic-base-runner:ci
+
     - name: setup cert-manager
       command: |
         helm repo add jetstack https://charts.jetstack.io

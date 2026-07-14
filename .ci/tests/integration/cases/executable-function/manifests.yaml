@@ -4,7 +4,7 @@ metadata:
   name: exec-function-excla-generic-sample
   namespace: default
 spec:
-  image: streamnative/pulsar-functions-generic-base-runner:latest
+  image: pulsar-functions-generic-base-runner:ci
   className: excla
   forwardSourceMessageProperty: true
   maxPendingAsyncRequests: 1000
