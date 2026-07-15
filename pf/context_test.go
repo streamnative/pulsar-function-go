@@ -64,10 +64,10 @@ func TestPublishWithSchemaSendsSchemaMetadata(t *testing.T) {
 		ctx:  context.Background(),
 		stub: stub,
 	}
-	schema := &PublishSchema{
+	schema := PublishMessageSchema{
 		SchemaType: SchemaTypeAvro,
 		Name:       "example.Event",
-		SchemaData: []byte(`{"type":"record","name":"Event","fields":[]}`),
+		SchemaData: `{"type":"record","name":"Event","fields":[]}`,
 		Properties: map[string]string{
 			"encoding": "binary",
 		},

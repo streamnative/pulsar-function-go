@@ -80,10 +80,10 @@ func HandleContextPublishAvro(ctx context.Context, in []byte) error {
 		return fmt.Errorf("missing publishTopic user config")
 	}
 
-	_, err = fc.PublishWithSchema(publishTopic, output, &pf.PublishSchema{
+	_, err = fc.PublishWithSchema(publishTopic, output, pf.PublishMessageSchema{
 		SchemaType: pf.SchemaTypeAvro,
 		Name:       "Student",
-		SchemaData: []byte(studentAvroSchema),
+		SchemaData: studentAvroSchema,
 	})
 	return err
 }
