@@ -107,6 +107,50 @@ func TestPublishWithSchemaSendsSchemaMetadata(t *testing.T) {
 	}
 }
 
+func TestPublishWithSchemaNoSchemaTypesPublishRawPayload(t *testing.T) {
+	tests := []struct {
+		name       string
+		schemaType string
+	}{
+		{name: "empty", schemaType: ""},
+		{name: "none", schemaType: SchemaTypeNone},
+		{name: "bytes", schemaType: SchemaTypeBytes},
+		{name: "trimmed uppercase bytes", schemaType: " BYTES "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := &publishCaptureStub{}
+			functionContext := &FunctionContext{
+				ctx:  context.Background(),
+				stub: stub,
+			}
+
+			_, err := functionContext.PublishWithSchema(
+				"persistent://public/default/raw",
+				[]byte("payload"),
+				PublishMessageSchema{
+					SchemaType: tt.schemaType,
+					Name:       "ignored",
+					SchemaData: `{"type":"record","name":"Ignored","fields":[]}`,
+				},
+			)
+			if err != nil {
+				t.Fatalf("PublishWithSchema returned error: %v", err)
+			}
+			if stub.message == nil {
+				t.Fatal("published message is nil")
+			}
+			if string(stub.message.GetPayload()) != "payload" {
+				t.Fatalf("payload = %q, want payload", stub.message.GetPayload())
+			}
+			if stub.message.GetSchema() != nil {
+				t.Fatalf("schema = %+v, want nil", stub.message.GetSchema())
+			}
+		})
+	}
+}
+
 type publishCaptureStub struct {
 	message *PulsarMessage
 }

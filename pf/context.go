@@ -226,6 +226,9 @@ func (c *FunctionContext) publish(topic string, payload []byte, schema *PublishS
 }
 
 func publishMessageSchemaToProto(schema PublishMessageSchema) *PublishSchema {
+	if isNoSchemaType(schema.SchemaType) {
+		return nil
+	}
 	properties := schema.Properties
 	if properties == nil {
 		properties = map[string]string{}
