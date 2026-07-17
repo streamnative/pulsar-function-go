@@ -74,6 +74,14 @@ message MessageId {
   string id = 1;
 }
 
+message PublishSchema {
+  string schemaType = 1;
+  string name = 2;
+  bytes schemaData = 3;
+  map<string, string> properties = 4;
+  string subject = 5;
+}
+
 message PulsarMessage {
   string topic = 1;
   bytes payload = 2;
@@ -86,6 +94,7 @@ message PulsarMessage {
   int32 eventTimestamp = 9;
   int32 deliverAt = 10;
   int32 deliverAfter = 11;
+  PublishSchema schema = 12;
 }
 
 message Record {

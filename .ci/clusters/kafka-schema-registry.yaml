@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-schema-registry
+  labels:
+    app: my-schema-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-schema-registry
+  template:
+    metadata:
+      labels:
+        app: my-schema-registry
+    spec:
+      containers:
+        - name: my-schema-registry
+          image: confluentinc/cp-schema-registry:7.8.0
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+              value: PLAINTEXT://my-kafka.default.svc.cluster.local:9092
+            - name: SCHEMA_REGISTRY_LISTENERS
+              value: http://0.0.0.0:8081
+            - name: SCHEMA_REGISTRY_HOST_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SCHEMA_REGISTRY_SCHEMA_REGISTRY_GROUP_ID
+              value: my-schema-registry-group
+            - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC
+              value: _schemas
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-schema-registry
+  labels:
+    app: my-schema-registry
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: 8081
+  selector:
+    app: my-schema-registry

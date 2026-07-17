@@ -192,11 +192,54 @@ func (c *FunctionContext) GetSecret(secretName string) (*string, error) {
 
 // Publish publishes payload to the given topic
 func (c *FunctionContext) Publish(topic string, payload []byte) (*SendMessageId, error) {
+	return c.publish(topic, payload, nil)
+}
+
+// PublishMessageSchema describes schema metadata for messages sent through
+// PublishWithSchema.
+type PublishMessageSchema struct {
+	SchemaType string
+	Name       string
+	SchemaData string
+	Properties map[string]string
+	Subject    string
+}
+
+// PublishWithSchema publishes an already-encoded payload with schema metadata.
+//
+// The Go SDK does not encode the payload. The caller must marshal the message
+// according to schema before calling this method. This requires a generic
+// runtime runner that consumes PulsarMessage.schema, such as a runner build that
+// includes streamnative/pulsar-functions-generic-runtime#42. Older runners
+// silently ignore this proto3 field and publish the payload as raw bytes.
+func (c *FunctionContext) PublishWithSchema(topic string, payload []byte, schema PublishMessageSchema) (*SendMessageId, error) {
+	return c.publish(topic, payload, publishMessageSchemaToProto(schema))
+}
+
+func (c *FunctionContext) publish(topic string, payload []byte, schema *PublishSchema) (*SendMessageId, error) {
 	messageId, err := c.stub.Publish(c.ctx, &PulsarMessage{
 		Topic:   topic,
 		Payload: payload,
+		Schema:  schema,
 	})
 	return messageId, err
+}
+
+func publishMessageSchemaToProto(schema PublishMessageSchema) *PublishSchema {
+	if isNoSchemaType(schema.SchemaType) {
+		return nil
+	}
+	properties := schema.Properties
+	if properties == nil {
+		properties = map[string]string{}
+	}
+	return &PublishSchema{
+		SchemaType: schema.SchemaType,
+		Name:       schema.Name,
+		SchemaData: []byte(schema.SchemaData),
+		Properties: properties,
+		Subject:    schema.Subject,
+	}
 }
 
 // GetCurrentRecord gets the current message from the function context
